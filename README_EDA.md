@@ -2,32 +2,31 @@
 
 ## Overview
 
-This directory contains comprehensive Exploratory Data Analysis (EDA) notebooks for validating the Customer Foundation Model using **pandas** for data processing.
+This directory contains comprehensive Exploratory Data Analysis (EDA) notebooks for validating the Customer Foundation Model using **spark** for data processing.
 
-All notebooks are designed to run on Databricks (runtime 14.3 ML) and use memory-efficient pandas techniques to handle large-scale datasets while preserving critical data structure constraints:
+All notebooks are designed to run on Databricks (runtime 14.3 ML) and use memory-efficient techniques to handle large-scale datasets while preserving critical data structure constraints:
 - **Per-customer isolation**: Each customer_id appears in exactly ONE chunk folder
 - **Chunk organization**: Chunks 0-255 (train), 256-319 (valid)
 - **Time splits**: In-time (pre-2024) vs OOT (2024+)
 
-### Pandas Processing Approach (Prioritizing Accuracy):
+### Processing Approach (Prioritizing Accuracy):
 
 **Notebooks 01-02** (Customer & Target Validation):
 - **True chunked processing**: Process one chunk at a time, never load full dataset
 - **Incremental aggregation**: Build statistics (counts, sums) incrementally
-- **Constant memory**: ~100-500 MB regardless of dataset size
 - **Best for**: Counting operations, customer tracking
 
 **Notebooks 03-04** (Feature Profiling & Drift):
-- **Full table with sampling**: Load complete table (sampled) for accurate statistics
+- **Full table with sampling**: Load complete table (or sub-sampled) for accurate statistics
 - **Accurate calculations**: Exact median, percentiles, PSI scores
-- **One table at a time**: Process sequentially, free memory between tables
+- **One table at a time**: Process sequentially, free up the memory between tables
 - **Best for**: Statistical distributions, drift detection
 
 **All Notebooks**:
 - **Selective column loading**: Only load necessary columns with `usecols`
 - **Memory management**: Explicit garbage collection after processing
 - **ADLS integration**: Direct file operations using `dbutils.fs`
-- **Hybrid efficiency**: Leverage Spark for Parquet reading, pandas for analysis
+- **Hybrid efficiency**: Leverage Spark for Parquet reading, combination of spark and pandas for analysis
 
 ---
 
@@ -56,7 +55,7 @@ All notebooks are designed to run on Databricks (runtime 14.3 ML) and use memory
 
 Run the notebooks in the following order for complete validation:
 
-### 1. `01_data_integrity_customer_uniqueness_pandas.ipynb`
+### 1. `01_data_integrity_customer_uniqueness.ipynb`
 **Purpose**: Validate fundamental data integrity constraints
 
 **Key Checks**:
@@ -78,7 +77,7 @@ Run the notebooks in the following order for complete validation:
 
 ---
 
-### 2. `02_target_analysis_by_split_pandas.ipynb`
+### 2. `02_target_analysis_by_split.ipynb`
 **Purpose**: Analyze all 33 prediction head targets across splits and time
 
 **Key Analyses**:
@@ -106,7 +105,7 @@ Run the notebooks in the following order for complete validation:
 
 ---
 
-### 3. `03_feature_profiling_pandas.ipynb`
+### 3. `03_feature_profiling.ipynb`
 **Purpose**: Comprehensive feature profiling across all feature tables
 
 **Tables Analyzed**:
@@ -142,7 +141,7 @@ Run the notebooks in the following order for complete validation:
 
 ---
 
-### 4. `04_drift_analysis_psi_pandas.ipynb`
+### 4. `04_drift_analysis_psi.ipynb`
 **Purpose**: Comprehensive drift analysis for both numerical and categorical features
 
 **Analysis Types**:
@@ -207,7 +206,7 @@ PLOT_SAMPLING_RATIO = 0.01    # For visualizations (notebooks 03, 04)
 DATA_PATH = "abfss://home@edaaaazepcalayelaye0001.dfs.core.windows.net/MD_Artifacts/money-out/data/"
 TARGET_TRAIN_VAL_PATH = DATA_PATH + "target/cust/all_products_chunk_320/train_val/"
 TARGET_TEST_PATH = DATA_PATH + "target/cust/all_products_chunk_320/test/"
-OUTPUT_PATH = "abfss://...//mv/eda_validation/{analysis_type}_pandas/"
+OUTPUT_PATH = "abfss://...//mv/eda_validation/{analysis_type}/"
 ```
 **Do not modify** unless data location changes.
 
@@ -233,23 +232,23 @@ All outputs saved to ADLS (no DBFS required):
 
 ```
 abfss://home@edaaaazepcalayelaye0001.dfs.core.windows.net/MD_Artifacts/money-out/mv/eda_validation/
-├── data_integrity_pandas/
+├── data_integrity/
 │   ├── chunk_summary_statistics.csv
 │   ├── validation_summary_report.csv
 │   ├── temporal_distribution_by_split.csv
 │   └── temporal_distribution_plots.png
-├── target_analysis_pandas/
+├── target_analysis/
 │   ├── target_statistics_by_split.csv
 │   ├── target_statistics_by_month.csv
 │   ├── class_imbalance_summary.csv
 │   ├── positive_rate_heatmap_by_split.png
 │   └── temporal_trends_*.png (one per category)
-├── feature_profiling_pandas/
+├── feature_profiling/
     │   ├── feature_profile_{family}_{table}.csv (one per table, with In-Time and OOT rows)
     │   └── plots/
     │       └── {family}_{table}/
     │           └── {feature}.png (individual boxplot for each numerical feature)
-└── drift_analysis_pandas/
+└── drift_analysis/
     ├── psi_overall_intime_vs_oot.csv (numerical features)
     ├── chi_square_overall_intime_vs_oot.csv (categorical features)
     ├── psi_monthly_trends_{table_name}.csv (per table, numerical)
@@ -320,7 +319,7 @@ These notebooks prioritize **statistical accuracy** while maintaining reasonable
 - **Mitigation**: 
   - Process one table at a time (10 tables total)
   - Free memory between tables with `gc.collect()`
-  - Use Spark's efficient Parquet reader before pandas conversion
+  - Use Spark's efficient Parquet reader 
   - Default 1% sampling keeps memory manageable
 
 **Trade-off Decision**: We prioritize **statistical accuracy** over minimal memory usage. 
@@ -470,21 +469,21 @@ All packages pre-installed in Databricks Runtime 14.3 ML.
 
 ### Note on Spark Usage and Data Loading
 
-While these are "pandas notebooks," they use Spark strategically:
+While these notebooks use Spark strategically:
 
 **All Notebooks**:
 - Read metadata JSONL with `spark.read.text()` (convenience)
 
 **Notebooks 01-02** (Target validation):
-- Load CSV chunks individually using pandas `pd.read_csv()`
-- Process one chunk at a time with pure pandas operations
-- True incremental aggregation (no Spark needed for processing)
+- Load CSV chunks individually
+- Process one chunk at a time with spark/pandas operations
+- True incremental aggregation
 
 **Notebooks 03-04** (Feature profiling & drift):
 - Use Spark to read Parquet files (more efficient than pandas for Parquet)
 - Apply sampling at Spark level: `spark.read.parquet().sample(fraction=0.01)`
-- Convert to pandas: `.toPandas()` for analysis
-- **Important**: This loads the FULL SAMPLED table into pandas to ensure accurate median/percentile calculations
+- Convert to pandas when needed: `.toPandas()` for analysis
+- **Important**: This loads the FULL SAMPLED table to ensure accurate median/percentile calculations
 
 **Why This Hybrid Approach**:
 - Spark excels at reading columnar Parquet format
@@ -536,7 +535,7 @@ Use this checklist to ensure complete validation:
    - Ensure cluster is running (Runtime 14.3 ML or higher)
 
 2. **Start with Notebook 01**
-   - Open `01_data_integrity_customer_uniqueness_pandas.ipynb`
+   - Open `01_data_integrity_customer_uniqueness.ipynb`
    - Review configuration cell (cell 3)
    - Adjust `SAMPLING_RATIO` if needed (start with 0.01 for testing)
    - Run all cells sequentially
@@ -583,7 +582,7 @@ For questions or issues:
 
 **Version 1.0** (2025-10-31)
 - Initial release
-- Four comprehensive pandas-based EDA notebooks
+- Four comprehensive EDA notebooks
 - Complete validation pipeline for Customer Foundation Model
 - Memory-efficient chunked processing
 - Configurable sampling ratios (1% to 100%)
@@ -608,14 +607,14 @@ For questions or issues:
 ## Quick Start
 
 ```python
-# 1. Open notebook 01_data_integrity_customer_uniqueness_pandas.ipynb
+# 1. Open notebook 01_data_integrity_customer_uniqueness.ipynb
 # 2. Adjust sampling if needed (cell 3):
 SAMPLING_RATIO = 0.01  # Start with 1% for testing
 
 # 3. Run all cells
 # 4. Monitor console output for progress
 # 5. Check outputs in ADLS:
-#    abfss://...//mv/eda_validation/data_integrity_pandas/
+#    abfss://...//mv/eda_validation/data_integrity/
 
 # 6. Repeat for notebooks 02, 03, 04
 ```
